@@ -52,6 +52,7 @@ class JiraUtils:
             "comments": []
         }
 
+        # Extracting attachments
         attachments = fields.get("attachment", [])
         for att in attachments:
             result["attachments"].append({
@@ -59,30 +60,42 @@ class JiraUtils:
                 "url": att.get("content")
             })
 
-        
+        # Extracting comments and filtering out non-text content
         comments = fields.get("comment", {}).get("comments", [])
         for c in comments:
+            # Extract text from body and ignore non-text elements (e.g., media files)
+            body = c.get("body", {})
+            text_content = self.extract_text_from_body(body)
+
             result["comments"].append({
                 "author": c.get("author", {}).get("displayName"),
-                "body": c.get("body"),
+                "body": text_content,  # Only the extracted text
                 "created": c.get("created")
             })
         
-        
-        # for key, value in fields.items():
-        #     if key.startswith("customfield") and value:
-        #         try:
-        #             # If value is a string that looks like JSON or contains PR summary, keep it
-        #             if isinstance(value, str) and ("pullrequest" in value or "github" in value.lower()):
-        #                 result["customfields"][key] = value
-        #             elif isinstance(value, dict) or isinstance(value, list):
-        #                 result["customfields"][key] = value
-        #         except Exception as e:
-        #             print(f"Failed parsing custom field {key}: {e}")
-
+        # Saving the result to a file
         with open(self.output_file, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
+        
         print(f"✅ Jira issue details saved to {self.output_file}")
         print(self.extract_figma_links(result))
         return self.extract_figma_links(result)
+
+
+    def extract_text_from_body(self, body):
+        """
+        Extracts the text from a Jira comment body (which may include multiple types of content).
+        This will traverse the body structure and gather only the text content.
+        """
+        text_content = ""
         
+        # Check if the body is in a structured format with 'content'
+        content = body.get("content", [])
+        for element in content:
+            if element.get("type") == "paragraph":
+                # Iterate through the 'content' inside paragraphs to extract text
+                for sub_element in element.get("content", []):
+                    if sub_element.get("type") == "text":
+                        text_content += sub_element.get("text", "")  # Append the text part
+
+        return text_content
